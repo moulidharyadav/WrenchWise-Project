@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  # Database with pgvector support
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: horizon_banking_db
+    environment:
+      POSTGRES_USER: banking_admin
+      POSTGRES_PASSWORD: banking_secure_password_2026
+      POSTGRES_DB: horizon_banking
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U banking_admin -d horizon_banking"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Event Stream Message Broker
+  redis:
+    image: redis:7-alpine
+    container_name: horizon_banking_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+  # Backend: FastAPI 9-Layer Banking Multi-Agent System
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: horizon_banking_backend
+    environment:
+      DATABASE_URL: postgresql+asyncpg://banking_admin:banking_secure_password_2026@db:5432/horizon_banking
+      REDIS_URL: redis://redis:6379/0
+      USE_LOCAL_EVENT_BUS: "false"
+      SECRET_KEY: enterprise_super_secret_jwt_key_9921_banking_auth_token
+      ENV: production
+      DEBUG: "false"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  # Frontend: React + TypeScript + Vite Cockpit
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: horizon_banking_frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
+  redisdata:
